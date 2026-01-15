@@ -19,7 +19,6 @@ import base64
 import requests
 import json
 
-# Download required NLTK data
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
@@ -40,7 +39,6 @@ try:
 except LookupError:
     nltk.download('punkt_tab', quiet=True)
 
-# Initialize session state
 if 'resume_text' not in st.session_state:
     st.session_state.resume_text = ""
 if 'job_description' not in st.session_state:
@@ -73,7 +71,6 @@ if 'ollama_available' not in st.session_state:
 if 'ai_suggestions' not in st.session_state:
     st.session_state.ai_suggestions = ""
 
-# Skill categorization database
 SKILL_CATEGORIES = {
     'Programming Languages': [
         'python', 'java', 'javascript', 'c', 'c++', 'c#', 'ruby', 'php', 'swift', 
@@ -201,7 +198,6 @@ SKILL_CATEGORIES = {
 
 }
 
-# Ollama Integration Functions
 def check_ollama_availability():
     """Check if Ollama is running and available"""
     try:
@@ -368,7 +364,6 @@ SUGGESTIONS:"""
     result = call_ollama(prompt, model=model, temperature=0.7)
     return result if result else None
 
-# Helper functions
 def extract_text_from_pdf(file):
     try:
         pdf_reader = PyPDF2.PdfReader(file)
@@ -397,14 +392,12 @@ def extract_keywords(text):
 
     text_lower = text.lower()
 
-    # ---- 1. Extract multi-word skills FIRST (protected) ----
     multi_word_skills = set()
     for skills in SKILL_CATEGORIES.values():
         for skill in skills:
             if len(skill.split()) > 1 and skill in text_lower:
                 multi_word_skills.add(skill)
 
-    # ---- 2. Remove matched phrases from text ----
     clean_text = text_lower
     for phrase in multi_word_skills:
         clean_text = clean_text.replace(phrase, "")
@@ -435,21 +428,19 @@ def calculate_ats_score(resume_keywords, jd_keywords):
     
     resume_set = set([k.lower() for k in resume_keywords])
     jd_set = set([k.lower() for k in jd_keywords])
-    
-    # Exact matches
+
     matched = set()
     for jd_kw in jd_set:
         if jd_kw in resume_set:
             matched.add(jd_kw)
-    
-    # Partial matches for phrases (only if not already matched)
+
     partial_matched = set()
     for jd_kw in jd_set:
         if jd_kw not in matched:
-            # Check if JD keyword is part of any resume keyword or vice versa
+
             for resume_kw in resume_set:
                 if jd_kw in resume_kw or resume_kw in jd_kw:
-                    # Ensure meaningful overlap (not just substrings like "a" in "java")
+
                     if len(jd_kw) > 2 and len(resume_kw) > 2:
                         if jd_kw in resume_kw or resume_kw in jd_kw:
                             partial_matched.add(jd_kw)
@@ -458,7 +449,7 @@ def calculate_ats_score(resume_keywords, jd_keywords):
     all_matched = matched.union(partial_matched)
     missing = jd_set - all_matched
     
-    # Calculate score
+
     score = (len(all_matched) / len(jd_set)) * 100 if jd_set else 0
     
     return round(score, 2), sorted(list(all_matched)), sorted(list(missing))
@@ -490,39 +481,39 @@ def optimize_resume_rule_based(resume_text, missing_keywords):
     
     optimized = resume_text
     
-    # Categorize missing keywords
+
     categorized_skills, uncategorized = categorize_skills(missing_keywords)
     
-    # Find existing SKILLS section
+
     skills_pattern = r'(SKILLS|TECHNICAL SKILLS|CORE COMPETENCIES|EXPERTISE)(.*?)(?=\n\n[A-Z]|\n[A-Z]{4,}|$)'
     skills_match = re.search(skills_pattern, resume_text, re.IGNORECASE | re.DOTALL)
     
     if skills_match:
-        # Replace existing skills section with categorized version
+
         skills_section_start = skills_match.start()
         skills_section_end = skills_match.end()
         
-        # Build new categorized skills section
+
         new_skills_lines = ["\n\n**SKILLS**"]
         
         for category, skills in categorized_skills.items():
             if skills:
-                # Format: Category: skill1, skill2, skill3
-                skills_str = ", ".join(skills[:10])  # Limit per category for 1-page
+
+                skills_str = ", ".join(skills[:10]) 
                 new_skills_lines.append(f"{category}: {skills_str}")
         
-        # Add uncategorized at the end
+
         if uncategorized:
             uncategorized_str = ", ".join(uncategorized[:8])
             new_skills_lines.append(f"Other: {uncategorized_str}")
         
         new_skills_section = "\n".join(new_skills_lines) + "\n"
         
-        # Replace old skills section
+
         optimized = resume_text[:skills_section_start] + new_skills_section + resume_text[skills_section_end:]
     
     else:
-        # Create new categorized skills section
+
         new_skills_lines = ["\n\n**SKILLS**"]
         
         for category, skills in categorized_skills.items():
@@ -542,11 +533,11 @@ def optimize_resume_rule_based(resume_text, missing_keywords):
 def generate_resume_from_form(form_data):
     resume = []
     
-    # Header with name
+
     if form_data['name']:
         resume.append(form_data['name'].upper())
     
-    # Contact info in one line
+
     contact = []
     if form_data['email']:
         contact.append(form_data['email'])
@@ -564,13 +555,13 @@ def generate_resume_from_form(form_data):
     
     resume.append('')
     
-    # Summary
+
     if form_data['summary']:
         resume.append('**PROFESSIONAL SUMMARY**')
         resume.append(form_data['summary'])
         resume.append('')
     
-    # Skills (categorized if possible)
+
     if form_data['skills']:
         resume.append('**SKILLS**')
         skills_list = [s.strip() for s in form_data['skills'].split(',')]
@@ -585,7 +576,7 @@ def generate_resume_from_form(form_data):
         
         resume.append('')
     
-    # Work Experience
+
     if any(exp['title'] or exp['company'] for exp in form_data['experience']):
         resume.append('**WORK EXPERIENCE**')
         for exp in form_data['experience']:
@@ -599,7 +590,7 @@ def generate_resume_from_form(form_data):
                     title_line.append(exp['duration'])
                 resume.append(' | '.join(title_line))
                 if exp['description']:
-                    # Split description into bullet points if not already
+                    
                     desc_lines = exp['description'].strip().split('\n')
                     for line in desc_lines:
                         line = line.strip()
@@ -610,7 +601,7 @@ def generate_resume_from_form(form_data):
                                 resume.append(line)
                 resume.append('')
     
-    # Projects
+
     if any(proj['name'] for proj in form_data['projects']):
         resume.append('**PROJECTS**')
         for proj in form_data['projects']:
@@ -622,7 +613,7 @@ def generate_resume_from_form(form_data):
                 if proj['technologies']:
                     resume.append(f"Technologies: {proj['technologies']}")
                 if proj['description']:
-                    # Split into bullet points
+
                     desc_lines = proj['description'].strip().split('\n')
                     for line in desc_lines:
                         line = line.strip()
@@ -632,14 +623,13 @@ def generate_resume_from_form(form_data):
                             else:
                                 resume.append(line)
                 resume.append('')
-    
-    # Education
+
     if form_data['education']:
         resume.append('**EDUCATION**')
         resume.append(form_data['education'])
         resume.append('')
     
-    # Certificates
+
     if any(cert['name'] for cert in form_data['certificates']):
         resume.append('**CERTIFICATIONS**')
         for cert in form_data['certificates']:
@@ -665,8 +655,7 @@ def generate_pdf(resume_text, name="Resume"):
     )
     
     styles = getSampleStyleSheet()
-    
-    # Custom styles for 1-page resume
+
     name_style = ParagraphStyle(
         'NameStyle',
         parent=styles['Heading1'],
@@ -728,41 +717,41 @@ def generate_pdf(resume_text, name="Resume"):
             story.append(Spacer(1, 0.05*inch))
             continue
         
-        # Remove markdown bold markers for processing
+
         line_clean = line.replace('**', '')
         
-        # Escape special characters for reportlab
+
         line_escaped = line_clean.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         
-        # First line is name
+
         if is_first_line:
             story.append(Paragraph(line_escaped, name_style))
             is_first_line = False
             is_second_line = True
             continue
         
-        # Second line is contact info
+
         if is_second_line:
             story.append(Paragraph(line_escaped, contact_style))
             is_second_line = False
             continue
         
-        # Check if line is a heading (has ** markers or is all caps keyword)
+
         heading_keywords = ['PROFESSIONAL SUMMARY', 'SUMMARY', 'SKILLS', 'TECHNICAL SKILLS', 
                           'WORK EXPERIENCE', 'EXPERIENCE', 'PROJECTS', 'PROJECT EXPERIENCE',
                           'EDUCATION', 'CERTIFICATIONS', 'CERTIFICATES']
         
         if line.startswith('**') and line.endswith('**'):
-            # Bold heading from markdown
+
             story.append(Paragraph(line_escaped, heading_style))
         elif any(line_clean.upper() == keyword for keyword in heading_keywords):
-            # Keyword heading
+
             story.append(Paragraph(line_escaped, heading_style))
         elif line.startswith('•') or line.startswith('-'):
-            # Bullet point
+
             story.append(Paragraph(line_escaped, bullet_style))
         else:
-            # Regular text
+
             story.append(Paragraph(line_escaped, normal_style))
     
     try:
@@ -791,13 +780,11 @@ def parse_resume_for_portfolio(resume_text):
     
     lines = resume_text.split('\n')
     
-    # Extract name (first non-empty line)
     for line in lines:
         if line.strip():
             data['name'] = line.strip().replace('**', '')
             break
-    
-    # Extract contact info (second line with |)
+
     for line in lines[1:3]:
         if '|' in line:
             parts = line.split('|')
@@ -813,8 +800,7 @@ def parse_resume_for_portfolio(resume_text):
                     data['portfolio'] = part.replace('Portfolio:', '').strip()
                 elif any(char.isdigit() for char in part):
                     data['phone'] = part
-    
-    # Extract summary
+
     summary_match = re.search(
     r'\*\*(PROFESSIONAL SUMMARY|SUMMARY|PROFILE)\*\*\n(.*?)(?=\n\*\*|\n[A-Z]{4,}|$)',
     resume_text, re.IGNORECASE | re.DOTALL
@@ -822,12 +808,11 @@ def parse_resume_for_portfolio(resume_text):
 
     if summary_match:
         data['summary'] = summary_match.group(1).strip()
-    
-    # Extract skills
+
     skills_match = re.search(r'\*\*SKILLS\*\*\n(.*?)(?=\n\*\*|\n[A-Z]{4,}|$)', resume_text, re.DOTALL)
     if skills_match:
         skills_text = skills_match.group(1).strip()
-        # Parse categorized skills
+
         for line in skills_text.split('\n'):
             if ':' in line:
                 category_skills = line.split(':', 1)[1].strip()
@@ -837,8 +822,6 @@ def parse_resume_for_portfolio(resume_text):
         skill_lines = re.findall(r'•\s*(.+)', resume_text)
         data['skills'] = list(set(skill_lines[:30]))
 
-    
-    # Extract projects
     projects_match = re.search(
     r'\*\*(PROJECTS|PROJECT EXPERIENCE|ACADEMIC PROJECTS)\*\*',
     resume_text, re.IGNORECASE
@@ -857,12 +840,12 @@ def parse_resume_for_portfolio(resume_text):
                     current_project = None
                 continue
             
-            # Check if new project (doesn't start with • or Technologies:)
+            
             if not line.startswith('•') and not line.startswith('Technologies:') and not line.startswith('-'):
                 if current_project:
                     data['projects'].append(current_project)
                 
-                # Extract project name and link
+                
                 if '|' in line and 'Link:' in line:
                     parts = line.split('|')
                     proj_name = parts[0].strip()
@@ -883,7 +866,7 @@ def parse_resume_for_portfolio(resume_text):
         if current_project:
             data['projects'].append(current_project)
     
-    # Extract experience
+    
     exp_match = re.search(
     r'\*\*(WORK EXPERIENCE|EXPERIENCE|PROFESSIONAL EXPERIENCE|INTERNSHIPS)\*\*',
     resume_text, re.IGNORECASE
@@ -901,7 +884,7 @@ def parse_resume_for_portfolio(resume_text):
                     current_exp = None
                 continue
             
-            # Check if new experience (has | separator)
+            
             if '|' in line and not line.startswith('•') and not line.startswith('-'):
                 if current_exp:
                     data['experience'].append(current_exp)
@@ -983,7 +966,7 @@ Return ONLY the full HTML document starting with <!DOCTYPE html>.
 
     html = call_ollama(prompt, model=model, temperature=0.55)
 
-    # ---- SAFETY CHECKS ----
+    
     if not html:
         return None
 
@@ -1008,7 +991,7 @@ Return ONLY the full HTML document starting with <!DOCTYPE html>.
 def generate_html_portfolio(resume_text):
     """Generate HTML portfolio from optimized resume"""
     
-    # Parse resume to extract data
+    
     data = parse_resume_for_portfolio(resume_text)
     
     name = data.get('name', 'Your Name')
@@ -1294,7 +1277,7 @@ def generate_html_portfolio(resume_text):
         </section>
 """
     
-    # Add experience section if available
+    
     if experience:
         html += """        
         <section id="experience">
@@ -1313,7 +1296,7 @@ def generate_html_portfolio(resume_text):
         </section>
 """
     
-    # Add projects section
+    
     html += """        
         <section id="projects">
             <h2>Projects</h2>
@@ -1356,7 +1339,7 @@ def generate_html_portfolio(resume_text):
 """
     
     if skills and len(skills) > 0:
-        for skill in skills[:40]:  # Limit to 40 skills for clean display
+        for skill in skills[:40]:  
             if skill.strip():
                 html += f'                <div class="skill-tag">{skill.strip()}</div>\n'
     else:
@@ -1378,24 +1361,24 @@ def generate_html_portfolio(resume_text):
 
 
 
-# Streamlit UI
+
 st.set_page_config(page_title="AI Resume & Portfolio Builder", page_icon="📄", layout="wide")
 
 st.title("🤖 AI-Powered Resume & Portfolio Builder")
 st.markdown("*Powered by Ollama Local AI*")
 st.markdown("---")
 
-# Check Ollama availability
+
 if st.session_state.ollama_available is None:
     with st.spinner("Checking Ollama availability..."):
         available, models = check_ollama_availability()
         st.session_state.ollama_available = available
         st.session_state.available_models = models if models else ["llama3.2:3b"]
 
-# Main tabs
+
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Resume Input", "🎯 ATS Analysis", "⚡ AI Optimization", "💡 AI Suggestions", "📦 Export"])
 
-# Tab 1: Resume Input
+
 with tab1:
     st.header("Resume Input")
     
@@ -1423,12 +1406,12 @@ with tab1:
                         height=400
                     )
     
-    else:  # Manual Resume Builder
+    else:  
         st.subheader("Build Your Resume")
         
         st.info("📌 Tips: Keep entries concise for 1-page format. Use bullet points for descriptions.")
         
-        # Personal Info
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -1441,7 +1424,7 @@ with tab1:
             st.session_state.form_data['github'] = st.text_input("GitHub URL", value=st.session_state.form_data['github'], placeholder="https://github.com/yourusername")
             st.session_state.form_data['portfolio_url'] = st.text_input("Portfolio URL", value=st.session_state.form_data['portfolio_url'], placeholder="https://yourportfolio.com")
         
-        # Professional Summary
+        
         st.subheader("Professional Summary")
         st.session_state.form_data['summary'] = st.text_area(
             "2-3 sentences highlighting your expertise (max 60 words)",
@@ -1451,7 +1434,7 @@ with tab1:
             max_chars=400
         )
         
-        # Skills
+        
         st.subheader("Skills")
         st.session_state.form_data['skills'] = st.text_area(
             "Enter skills separated by commas",
@@ -1460,7 +1443,7 @@ with tab1:
             placeholder="Python, Java, React, AWS, Docker, Machine Learning"
         )
         
-        # Work Experience
+        
         st.subheader("Work Experience")
         num_experiences = st.number_input("Number of experiences", min_value=0, max_value=5, value=len(st.session_state.form_data['experience']))
         
@@ -1501,7 +1484,7 @@ with tab1:
                     placeholder="• Achieved X by doing Y\n• Improved Z by N%\n• Led team of N people"
                 )
         
-        # Projects
+        
         st.subheader("Projects")
         num_projects = st.number_input("Number of projects", min_value=0, max_value=6, value=len(st.session_state.form_data['projects']))
         
@@ -1544,7 +1527,7 @@ with tab1:
                     placeholder="• Brief description of what the project does\n• Key features or achievements"
                 )
         
-        # Education
+        
         st.subheader("Education")
         st.session_state.form_data['education'] = st.text_area(
             "Education Details",
@@ -1553,7 +1536,7 @@ with tab1:
             placeholder="Bachelor of Science in Computer Science\nUniversity Name | 2018-2022 | GPA: 3.8/4.0"
         )
         
-        # Certifications
+        
         st.subheader("Certifications")
         num_certs = st.number_input("Number of certifications", min_value=0, max_value=6, value=len(st.session_state.form_data['certificates']))
         
@@ -1600,7 +1583,7 @@ with tab1:
             st.subheader("📄 Live Preview")
             st.text_area("Generated Resume", value=st.session_state.resume_text, height=400, key="preview_resume", disabled=True)
 
-# Tab 2: ATS Analysis
+
 with tab2:
     st.header("ATS Keyword Analyzer")
     
@@ -1645,7 +1628,7 @@ with tab2:
         st.markdown("---")
         st.subheader("📊 ATS Analysis Results")
         
-        # Score display with color coding
+        
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -1659,23 +1642,23 @@ with tab2:
         with col3:
             st.metric("Missing Keywords", len(st.session_state.missing_keywords))
         
-        # Matched keywords
+        
         if st.session_state.matched_keywords:
             st.subheader("✅ Matched Keywords")
             matched_html = " ".join([f'<span style="background-color: #d4edda; color: #155724; padding: 5px 10px; margin: 5px; border-radius: 5px; display: inline-block;">{kw}</span>' for kw in st.session_state.matched_keywords[:50]])
             st.markdown(matched_html, unsafe_allow_html=True)
         
-        # Missing keywords
+        
         if st.session_state.missing_keywords:
             st.subheader("❌ Missing Keywords")
             missing_html = " ".join([f'<span style="background-color: #f8d7da; color: #721c24; padding: 5px 10px; margin: 5px; border-radius: 5px; display: inline-block;">{kw}</span>' for kw in st.session_state.missing_keywords[:50]])
             st.markdown(missing_html, unsafe_allow_html=True)
 
-# Tab 3: AI Optimization
+
 with tab3:
     st.header("⚡ AI-Powered Resume Optimization")
     
-    # Ollama Status
+    
     col1, col2 = st.columns([3, 1])
     with col1:
         if st.session_state.ollama_available:
@@ -1696,7 +1679,7 @@ with tab3:
     elif st.session_state.ats_score is None:
         st.warning("⚠️ Please run ATS analysis first in the ATS Analysis tab.")
     else:
-        # Model selection
+        
         if st.session_state.ollama_available and st.session_state.available_models:
             selected_model = st.selectbox(
                 "🤖 Select AI Model",
@@ -1708,7 +1691,7 @@ with tab3:
         
         st.info(f"💡 AI will intelligently optimize your resume by adding missing keywords naturally without hallucinating content. Using model: **{selected_model}**")
         
-        # Optimization options
+        
         col1, col2 = st.columns(2)
         with col1:
             optimization_type = st.radio(
@@ -1750,7 +1733,7 @@ with tab3:
                         st.error("❌ Optimization failed: result too short. Using original resume.")
                         st.session_state.optimized_resume = st.session_state.resume_text
             
-            else:  # AI-Powered
+            else:  
                 if not st.session_state.ollama_available:
                     st.error("❌ Please start Ollama first to use AI optimization")
                 else:
@@ -1787,7 +1770,7 @@ with tab3:
                     st.info("Reset complete. Original resume preserved.")
                     st.rerun()
 
-# Tab 4: AI Suggestions
+
 with tab4:
     st.header("💡 AI-Powered Resume Suggestions")
     
@@ -1802,7 +1785,7 @@ with tab4:
     elif not st.session_state.job_description:
         st.warning("⚠️ Please provide a job description first.")
     else:
-        # Model selection
+        
         if st.session_state.available_models:
             selected_model = st.selectbox(
                 "🤖 Select AI Model",
@@ -1853,7 +1836,6 @@ with tab4:
             st.subheader("📋 AI Recommendations")
             st.markdown(st.session_state.ai_suggestions)
         
-        # Bullet point improvement
         st.markdown("---")
         st.subheader("🎯 Improve Bullet Points with AI")
         st.info("💡 Paste your bullet points below and AI will make them more impactful and achievement-focused")
@@ -1882,14 +1864,14 @@ with tab4:
                 else:
                     st.error("❌ Failed to improve bullet points. Please try again.")
 
-# Tab 5: Export
+
 with tab5:
     st.header("📦 Export Options")
     
     if not st.session_state.resume_text:
         st.warning("⚠️ Please provide a resume in the Resume Input tab first.")
     else:
-        # Choose which resume to export
+        
         resume_to_export = st.radio(
             "Select resume version to export:",
             ["Original Resume", "Optimized Resume (if available)"],
@@ -1941,7 +1923,7 @@ with tab5:
 
             if st.button("🎨 Generate Portfolio", type="primary", use_container_width=True):
                 with st.spinner("Generating portfolio from optimized resume..."):
-                    # Use optimized resume if available for portfolio
+                    
                     portfolio_source = st.session_state.optimized_resume if st.session_state.optimized_resume else st.session_state.resume_text
                     if portfolio_mode == "AI-Generated (Smart)":
                         html_content = generate_html_portfolio_ai(
@@ -1968,7 +1950,7 @@ with tab5:
         st.subheader("📄 Preview Current Resume")
         st.text_area("Resume Content", value=final_resume, height=400, disabled=True, key="export_preview")
         
-        # Word count check for 1-page guideline
+        
         word_count = len(final_resume.split())
         if word_count > 600:
             st.warning(f"⚠️ Your resume has {word_count} words. Consider reducing to 400-600 words for a clean 1-page format.")
@@ -1977,11 +1959,11 @@ with tab5:
         else:
             st.info(f"ℹ️ Your resume has {word_count} words. You have room to add more details!")
 
-# Sidebar
+
 with st.sidebar:
     st.header("📊 Dashboard")
     
-    # Ollama Status
+   
     st.subheader("🤖 AI Status")
     if st.session_state.ollama_available:
         st.success("✅ Ollama: Online")
@@ -1998,7 +1980,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ATS Score
+    
     if st.session_state.ats_score is not None:
         st.metric("📊 Current ATS Score", f"{st.session_state.ats_score}%")
         
@@ -2074,4 +2056,5 @@ with st.sidebar:
     
     st.markdown("---")
     st.caption("Made with ❤️ using Streamlit & Ollama")
+
     st.caption("v2.0 - AI-Powered Resume Builder")
